@@ -1,0 +1,13 @@
+{
+  "name": "sea-credit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sea Credit website and client portal development project",
+  "scripts": {
+    "dev": "node preview.cjs",
+    "start": "node preview.cjs",
+    "check": "node --check dist/app.js && node --check preview.cjs"
+  },
+  "engines": { "node": ">=20" },
+  "stackblitz": { "startCommand": "npm run dev" }
+}
