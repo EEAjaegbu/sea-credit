@@ -1,12 +1,14 @@
 {
   "name": "sea-credit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Sea Credit website and client portal development project",
   "scripts": {
     "dev": "node preview.cjs",
     "start": "node preview.cjs",
-    "check": "node --check dist/app.js && node --check preview.cjs"
+    "check": "node --check dist/app.js && node --check dist/portal.js && node --check server/app.cjs && node --check server/store.cjs && node --check preview.cjs && node --check scripts/create-admin.cjs",
+    "test": "node --test test/workflow.test.cjs",
+    "admin:create": "node scripts/create-admin.cjs"
   },
   "engines": { "node": ">=20" },
   "stackblitz": { "startCommand": "npm run dev" }

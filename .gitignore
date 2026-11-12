@@ -4,3 +4,8 @@ node_modules/
 !.env.example
 *.log
 .DS_Store
+.data/
+coverage/
+*.zip
+*.tar.gz
+.openai/
