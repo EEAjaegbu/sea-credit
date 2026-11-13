@@ -178,7 +178,9 @@ document.addEventListener('submit', async event => {
   form.dataset.busy='true';
   const button=form.querySelector('button[type="submit"]');
   const previousLabel=button.textContent;
-  button.disabled=true;button.textContent='Saving…';
+  button.disabled=true;
+  button.textContent=form.id==='auth-form' ? (form.dataset.mode==='login'?'Signing in…':'Creating account…') : 'Saving…';
+  form.setAttribute('aria-busy','true');
   const errorBox=form.querySelector('[data-error]');
   errorBox.hidden=true;
   const body=Object.fromEntries(new FormData(form));
@@ -191,9 +193,20 @@ document.addEventListener('submit', async event => {
         show('<h2>Check your email</h2><p>If this address can be registered, Supabase will send a confirmation link. Open it in the same browser, then sign in. If you already have an account, sign in with that account instead.</p><p class="small">The link must return to this preview. Ask the project owner to check Supabase URL Configuration if it goes somewhere else.</p><button class="btn" data-action="close">Return to sign in</button>');
         return;
       }
+      const destination=data.user.role==='admin'?'portal':state.afterAuth;
+      // Keep the sign-in form visible until the first dashboard is ready.
+      // Render it directly to avoid an extra loading screen and duplicate fetch.
+      const initialApplications=destination==='portal' ? await api('/applications') : null;
+      if (!form.isConnected) return;
       state.user=data.user;
-      const destination=state.user.role==='admin'?'portal':state.afterAuth;
-      state.afterAuth='portal';go(destination);toast(form.dataset.mode==='register'?'Your test account is ready.':'Welcome back.');
+      state.afterAuth='portal';
+      if(initialApplications) {
+        state.applications=initialApplications.applications;
+        ++state.routeVersion;
+        history.pushState(null,'','#portal');
+        overview();window.scrollTo(0,0);
+      } else go(destination);
+      toast(form.dataset.mode==='register'?'Your test account is ready.':'Welcome back.');
     } else if(form.id==='resend-form') {
       await api('/auth/resend',{method:'POST',body});
       modal.close();toast('If the account needs confirmation, check its inbox for a new link.');
@@ -215,7 +228,7 @@ document.addEventListener('submit', async event => {
     // Incorrect credentials should remain on the sign-in form instead of causing a route loop.
     if(form.id==='auth-form'||form.id==='resend-form'){errorBox.textContent=error.message;errorBox.hidden=false;errorBox.focus();}
     else errorMessage(error,form);
-  } finally { form.dataset.busy='false';button.disabled=false;button.textContent=previousLabel; }
+  } finally { form.dataset.busy='false';form.removeAttribute('aria-busy');button.disabled=false;button.textContent=previousLabel; }
 });
 window.addEventListener('hashchange',renderRoute);
 async function boot() {
