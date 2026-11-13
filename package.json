@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node preview.cjs",
     "start": "node preview.cjs",
-    "check": "node --check dist/app.js && node --check dist/portal.js && node --check dist/supabase-data.js && node --check dist/supabase-config.js && node --check server/app.cjs && node --check preview.cjs",
+    "check": "node --check dist/app.js && node --check dist/portal.js && node --check dist/supabase-data.js && node --check dist/supabase-config.js && node --check server/app.cjs && node --check preview.cjs && node --check dist/application-fields.js && node --check dist/application-documents.js",
     "test": "node --test test/supabase.test.cjs"
   },
   "engines": {

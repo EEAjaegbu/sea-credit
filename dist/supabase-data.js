@@ -22,7 +22,7 @@
     if (setupReady) return;
     const { data, error } = await client.rpc('sea_setup_status');
     fail(error);
-    if (data?.schemaVersion !== 1) throw new Error('The database version does not match this app. Apply supabase/setup.sql first.');
+    if (data?.schemaVersion !== 2) throw new Error('The database version does not match this app. Apply supabase/migrations/002-expanded-applications.sql (or the latest setup.sql) first.');
     setupReady = true;
   }
   async function currentProfile() {
@@ -31,7 +31,7 @@
   }
   const normalize = a => ({
     id:a.id,userId:a.user_id,reference:a.reference,applicantName:a.applicant_name,applicantEmail:a.applicant_email,
-    product:a.product,amount:Number(a.amount),termMonths:a.term_months,phone:a.phone,address:a.address,
+    product:a.product,amount:Number(a.amount),termMonths:a.term_months,termDays:a.term_days,additionalDetails:a.additional_details || {},phone:a.phone,address:a.address,
     employmentType:a.employment_type,employer:a.employer,jobTitle:a.job_title,monthlyIncome:Number(a.monthly_income),
     purpose:a.purpose,status:a.status,version:a.version,createdAt:a.created_at,updatedAt:a.updated_at,
     history:(a.application_events || []).map(e=>({id:e.id,actorRole:e.actor_role,actorId:e.actor_id,status:e.status,note:e.note,at:e.created_at})).sort((x,y)=>x.at.localeCompare(y.at))

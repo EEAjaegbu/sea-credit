@@ -71,3 +71,7 @@ test/supabase.test.cjs   PostgreSQL, adapter and static-server tests
 ```
 
 Keep the GitHub repository and StackBlitz project private. `private: true` in package.json only prevents npm publication. Fonts load from Google Fonts and the landing-page photograph loads from Unsplash. Branding is visually matched to the supplied Sea Credit reference.
+
+## Expanded application update
+
+See [UPGRADE-V2.md](supabase/UPGRADE-V2.md) for the required database and private document storage migrations. Existing deployments must run 002 then 003 before testing the updated form. New tenures are 7, 14, 21, 28, 56 and 84 days.

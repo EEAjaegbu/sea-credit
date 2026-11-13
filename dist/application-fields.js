@@ -1,0 +1,41 @@
+'use strict';
+const loanTenures = [[7,'7 days'],[14,'14 days'],[21,'21 days'],[28,'28 days (1 month)'],[56,'56 days (2 months)'],[84,'84 days (3 months)']];
+const tenureLabel = a => a.termDays ? (loanTenures.find(([days])=>days===Number(a.termDays))?.[1] || `${a.termDays} days`) : `${a.termMonths} month${a.termMonths===1?'':'s'} (original application)`;
+const documentTypes = [
+  ['bank_statement','Bank statement',1],['identification','Copy of identification',1],
+  ['utility_bill','Utility bill',1],['employment_proof','Employment/promotion letter or CAC certificate',1],
+  ['house_photo','House photograph',1],['office_photos','Office photographs',3],
+  ['passport_photo','Passport photograph',1],['guarantor_identity','Guarantor identification',1]
+];
+const additionalLabels = {officeAddress:'Office/business address',whatsapp:'WhatsApp number',businessRegistration:'Business registration number',linkedin:'LinkedIn profile',grossIncome:'Gross monthly income',bankName:'Bank name',accountName:'Account name',accountNumber:'Account number',identityType:'Identity type',identityNumber:'Identity number',bvn:'BVN',guarantorName:'Guarantor name',guarantorRelationship:'Relationship to guarantor',guarantorEmployer:'Guarantor employer/business',guarantorAddress:'Guarantor address',guarantorPhone:'Guarantor phone'};
+function expandedApplicationForm(existing) {
+  if(state.user.role!=='customer') return shell('applications','<div class="panel"><h2>Customer applications</h2><p>Sign in with a customer account to submit an application.</p></div>');
+  const v=existing ? {...existing,...existing.additionalDetails,legalName:existing.applicantName} : {legalName:state.user.name,product:'salary_advance',amount,termDays:months*28,phone:state.user.phone,address:state.user.address,employmentType:'salaried'};
+  const input=(name,label,type='text',attrs='',required=true)=>`<div><label for="application-${name}">${label}${required?' *':' (optional)'}</label><input id="application-${name}" name="${name}" type="${type}" value="${esc(v[name]??'')}" ${required?'required':''} ${attrs}></div>`;
+  const select=(name,label,options)=>`<div><label for="application-${name}">${label} *</label><select id="application-${name}" name="${name}" required><option value="">Choose an option</option>${options.map(([value,label])=>`<option value="${value}" ${String(v[name])===String(value)?'selected':''}>${label}</option>`).join('')}</select></div>`;
+  const text=(name,label,min=2,max=100,required=true)=>input(name,label,'text',`minlength="${min}" maxlength="${max}"`,required);
+  const phone=(name,label)=>input(name,label,'tel','minlength="7" maxlength="20" pattern="[+0-9 ()\\-]+"');
+  const income=(name,label)=>input(name,label,'number','min="1" max="100000000" step="1"');
+  const section=(number,title,body)=>`<fieldset class="application-section"><legend>${number} &nbsp; ${title}</legend><div class="form-grid">${body}</div></fieldset>`;
+  shell('apply',`<a class="textbtn" href="${existing?'#application/'+existing.id:'#applications'}">← Back to applications</a><div class="form-heading"><div class="eyebrow">Your next chapter</div><h1>${existing?'Update your application':'Tell us what you need.'}</h1><p>Complete each section. Fields marked * are required. Use fictional details and sample documents in this test environment.</p></div>
+  ${existing?`<div class="review-note"><b>Your reviewer asked:</b><p>${esc(existing.history.at(-1)?.note)}</p></div>`:''}
+  <form id="application-form" class="panel application-form" data-id="${existing?.id||''}" data-version="${existing?.version||''}" data-request-id="${crypto.randomUUID()}">
+  ${section('01','Loan details',select('product','Product',Object.entries(productNames))+input('amount','Requested amount (₦)','number','min="50000" max="1000000" step="1"')+select('termDays','Loan tenure',loanTenures)+`<div class="field-note">Maximum tenure: 84 days. One month means 28 days, two months 56 days, and three months 84 days. Rates and fees are confirmed separately.</div><div class="full"><label for="application-purpose">Purpose of the loan *</label><textarea id="application-purpose" name="purpose" minlength="10" maxlength="1000" rows="3" required>${esc(v.purpose||'')}</textarea></div>${existing&&!existing.termDays?`<p class="small full">Original tenure: ${esc(tenureLabel(existing))}. Select a current tenure to resubmit.</p>`:''}`)}
+  ${section('02','Personal and contact information',text('legalName','Full legal name')+`<div><label>Email address</label><p>${esc(state.user.email)}</p><p class="small">Linked to your signed-in account.</p></div>`+text('address','Home address',5,300)+text('officeAddress','Office/business address',5,300)+phone('phone','Phone number')+phone('whatsapp','WhatsApp number')+input('linkedin','LinkedIn profile','url','maxlength="300" placeholder="https://www.linkedin.com/in/your-profile"',false))}
+  ${section('03','Employment and income',select('employmentType','Employment status',[['salaried','Salaried employee'],['self_employed','Self-employed'],['other','Other']])+text('employer','Employer/business name',2,120)+text('jobTitle','Job title')+text('businessRegistration','Business registration number',2,80,false)+'<p class="small full">Business registration is required for self-employed applicants.</p>'+income('grossIncome','Monthly income before deductions (₦)')+income('monthlyIncome','Monthly take-home income (₦)'))}
+  ${section('04','Identity and bank details',select('identityType','Identification type',[['nin','NIN'],['drivers_license',"Driver’s licence"],['passport','International passport'],['voters_card',"Voter’s card"]])+text('identityNumber','Identity number',5,40)+input('bvn','BVN','text','inputmode="numeric" pattern="[0-9]{11}" minlength="11" maxlength="11"')+text('bankName','Bank name')+text('accountName','Account name')+input('accountNumber','Account number','text','inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10"')+'<p class="small full">For testing, use made-up identifiers. These fields do not verify identity, ownership of a bank account, or authorise a debit.</p>')}
+  ${section('05','Guarantor details',text('guarantorName','Guarantor full name')+text('guarantorRelationship','Relationship to guarantor')+text('guarantorEmployer','Guarantor employer/business',2,120)+text('guarantorAddress','Guarantor address',5,300)+phone('guarantorPhone','Guarantor phone number')+'<label class="checkbox-label full"><input type="checkbox" name="guarantorConsent" required> I have permission to provide these guarantor details. For this test, all details are fictional.</label>')}
+  ${section('06','Supporting documents',`<p class="full">Save your application first, then attach documents from its detail page. Upload progress and missing items are shown there.</p><ul class="full">${documentTypes.map(([,label,min])=>`<li>${label}${min>1?` — at least ${min} photos`:''}</li>`).join('')}</ul><p class="small full">PDF, JPEG or PNG, maximum 5 MB per file. Files are private to the applicant and authorised reviewers. Use sample documents only.</p>`)}
+  ${existing?'<label for="review-response">Response to the reviewer *</label><textarea id="review-response" name="note" minlength="5" maxlength="2000" rows="3" required></textarea>':''}
+  <label class="checkbox-label"><input name="testConsent" type="checkbox" required> I confirm this is fictional test information. Saving this request does not issue a loan or trigger a payment.</label>
+  <div data-error class="form-error" role="alert" tabindex="-1" hidden></div><div class="form-actions"><button type="submit" class="btn">${existing?'Resubmit application':'Save & continue to documents'} →</button><a class="textbtn" href="#applications">Cancel</a></div></form>`);
+  syncBusinessRegistration();
+}
+
+function syncBusinessRegistration(){
+  const field=document.querySelector('#application-businessRegistration');
+  if(!field)return;
+  field.required=document.querySelector('#application-employmentType').value==='self_employed';
+  document.querySelector('label[for="application-businessRegistration"]').textContent='Business registration number'+(field.required?' *':' (optional)');
+}
+document.addEventListener('change',event=>{if(event.target.id==='application-employmentType')syncBusinessRegistration();});

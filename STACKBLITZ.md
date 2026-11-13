@@ -52,3 +52,7 @@ npm test
 These tests use an isolated PostgreSQL-compatible local engine and mock auth identity; they do not send emails or alter the live project. Real sign-up, email confirmation and hosted RLS need verification after the hosted migration is applied.
 
 Payments, loan disbursements, supporting documents and password recovery are outside this milestone. Use fictional application details only.
+
+## Expanded application update
+
+See [UPGRADE-V2.md](supabase/UPGRADE-V2.md) for the required database and private document storage migrations. Existing deployments must run 002 then 003 before testing the updated form. New tenures are 7, 14, 21, 28, 56 and 84 days.

@@ -21,7 +21,7 @@ test('PostgreSQL schema, RLS and customer/reviewer workflow', async t => {
   const migration = fs.readFileSync(path.join(__dirname,'../supabase/setup.sql'),'utf8');
   await db.exec(migration);
   const alice='00000000-0000-4000-8000-000000000001',bob='00000000-0000-4000-8000-000000000002',reviewer='00000000-0000-4000-8000-000000000003';
-  const fields={product:'salary_advance',amount:150000,termMonths:3,phone:'08000000000',address:'10 Fictional Road, Lagos',employmentType:'salaried',employer:'Example Test Ltd',jobTitle:'Analyst',monthlyIncome:350000,purpose:'Fictional expense for workflow testing.',testConsent:true};
+  const fields={product:'salary_advance',amount:150000,termDays:84,phone:'08000000000',address:'10 Fictional Road, Lagos',employmentType:'salaried',employer:'Example Test Ltd',jobTitle:'Analyst',monthlyIncome:350000,purpose:'Fictional expense for workflow testing.',testConsent:true,legalName:'Alice Test',officeAddress:'12 Fictional Office Road',whatsapp:'08000000000',bankName:'Test Bank',accountName:'Alice Test',accountNumber:'0000000000',identityType:'nin',identityNumber:'00000000000',bvn:'00000000000',guarantorName:'Test Guarantor',guarantorEmployer:'Example Ltd',guarantorAddress:'21 Fictional Road',guarantorPhone:'08000000001',guarantorRelationship:'Colleague',grossIncome:400000,guarantorConsent:true,linkedin:'',businessRegistration:''};
   async function asUser(id,fn) {
     return db.transaction(async tx=>{
       await tx.exec('set local role authenticated');
@@ -40,7 +40,7 @@ test('PostgreSQL schema, RLS and customer/reviewer workflow', async t => {
     assert.equal((await db.query('select count(*)::int as n from public.profiles')).rows[0].n,3);
   });
   await t.test('anonymous access is restricted to setup readiness',async()=>{
-    await db.transaction(async tx=>{await tx.exec('set local role anon');assert.equal((await tx.query('select public.sea_setup_status() as s')).rows[0].s.schemaVersion,1);});
+    await db.transaction(async tx=>{await tx.exec('set local role anon');assert.equal((await tx.query('select public.sea_setup_status() as s')).rows[0].s.schemaVersion,2);});
     await assert.rejects(db.transaction(async tx=>{await tx.exec('set local role anon');await tx.query('select * from public.applications');}),/permission denied/i);
     await assert.rejects(db.transaction(async tx=>{await tx.exec('set local role anon');await tx.query('select public.sea_current_profile()');}),/permission denied/i);
   });
@@ -52,7 +52,7 @@ test('PostgreSQL schema, RLS and customer/reviewer workflow', async t => {
   });
   await t.test('database validates amounts, terms, income and consent before insertion',async()=>{
     const key='10000000-0000-4000-8000-000000000001';
-    for(const patch of [{amount:-1},{amount:50000.5},{termMonths:12},{monthlyIncome:0},{testConsent:false},{purpose:'bad'}]) await assert.rejects(submit(alice,key,{...fields,...patch}));
+    for(const patch of [{amount:-1},{amount:50000.5},{termDays:180},{monthlyIncome:0},{testConsent:false},{purpose:'bad'},{grossIncome:1},{guarantorConsent:false},{accountNumber:'123'},{bvn:'abc'},{termDays:90},{termDays:28.5},{identityType:'unknown'},{employmentType:'self_employed',businessRegistration:''}]) await assert.rejects(submit(alice,key,{...fields,...patch}));
     assert.equal((await db.query('select count(*)::int as n from public.applications')).rows[0].n,0);
   });
   await t.test('submission is idempotent and customer rows are isolated by RLS',async()=>{
@@ -91,6 +91,51 @@ test('PostgreSQL schema, RLS and customer/reviewer workflow', async t => {
     const result=await asUser(alice,tx=>tx.query('select public.sea_update_profile($1,$2,$3) as p',['Alice Updated','08000000000','20 Test Street, Lagos']));
     assert.equal(result.rows[0].p.name,'Alice Updated');assert.equal(result.rows[0].p.email,'alice@example.test');assert.equal(result.rows[0].p.role,'customer');
   });
+  await t.test('all six tenures round-trip with expanded fields',async()=>{
+    for(const days of [7,14,21,28,56,84]) {
+      const id=await submit(alice,require('node:crypto').randomUUID(),{...fields,termDays:days});
+      const a=(await asUser(alice,tx=>tx.query('select * from public.applications where id=$1',[id]))).rows[0];
+      assert.equal(a.term_days,days);assert.equal(a.term_months,null);
+      assert.equal(a.additional_details.accountNumber,'0000000000');
+      assert.equal(a.additional_details.grossIncome,400000);
+      assert.equal(a.applicant_name,'Alice Test');
+      await change(alice,id,1,'cancel');
+    }
+  });
+  await t.test('private document policies isolate owners and restrict edits',async()=>{
+    // The Storage HTTP service is not simulated; execute its policies against mocked tables.
+    await db.exec(`create schema storage;
+      create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+      create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+      alter table storage.objects enable row level security;
+      grant usage on schema storage to anon,authenticated;
+      grant select,insert,delete,update on storage.objects to anon,authenticated;`);
+    const sql=fs.readFileSync(path.join(__dirname,'../supabase/migrations/003-private-documents.sql'),'utf8');
+    await db.exec(sql);await db.exec(sql);
+    assert.equal((await db.query('select public from storage.buckets')).rows[0].public,false);
+    const id=await submit(alice,require('node:crypto').randomUUID());
+    const object=`${alice}/${id}/bank_statement/10000000-0000-4000-8000-000000000001.pdf`;
+    await asUser(alice,tx=>tx.query("insert into storage.objects(bucket_id,name) values('application-documents',$1)",[object]));
+    assert.equal((await asUser(bob,tx=>tx.query('select * from storage.objects'))).rows.length,0);
+    assert.equal((await asUser(reviewer,tx=>tx.query('select * from storage.objects'))).rows.length,1);
+    await assert.rejects(asUser(bob,tx=>tx.query("insert into storage.objects(bucket_id,name) values('application-documents',$1)",[object])),/row-level security/i);
+    await assert.rejects(asUser(alice,tx=>tx.query("insert into storage.objects(bucket_id,name) values('application-documents',$1)",[object.replace('.pdf','.html')])),/row-level security/i);
+    assert.equal((await asUser(reviewer,tx=>tx.query('delete from storage.objects returning *'))).rows.length,0);
+    await change(reviewer,id,1,'review',{status:'under_review',note:'Document review in progress'});
+    await assert.rejects(asUser(alice,tx=>tx.query("insert into storage.objects(bucket_id,name) values('application-documents',$1)",[object])),/row-level security/i);
+    assert.equal((await asUser(alice,tx=>tx.query('delete from storage.objects returning *'))).rows.length,0);
+    await change(reviewer,id,2,'review',{status:'needs_information',note:'Please supply another document'});
+    assert.equal((await asUser(alice,tx=>tx.query('delete from storage.objects returning *'))).rows.length,1);
+    await change(alice,id,3,'cancel');
+  });
+  await t.test('upgrade preserves original six-month applications',async()=>{
+    const id=await submit(alice,require('node:crypto').randomUUID());
+    await db.query('update public.applications set term_days=null,term_months=6,additional_details=\'{}\' where id=$1',[id]);
+    await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/002-expanded-applications.sql'),'utf8'));
+    const a=(await db.query('select * from public.applications where id=$1',[id])).rows[0];
+    assert.equal(a.term_months,6);assert.equal(a.term_days,null);
+    await change(alice,id,1,'cancel');
+  });
   await t.test('open application limit and withdrawal are enforced by the database',async()=>{
     let first;
     for(let i=10;i<15;i++) { const id=await submit(bob,`10000000-0000-4000-8000-0000000000${i}`);first ||= id; }
@@ -102,7 +147,7 @@ test('PostgreSQL schema, RLS and customer/reviewer workflow', async t => {
 
 test('Supabase adapter handles email confirmation and missing setup clearly',async t=>{
   const rpcCalls=[];
-  const fake={rpc:async(name)=>{rpcCalls.push(name);return {data:{schemaVersion:1},error:null};},auth:{signUp:async()=>({data:{user:{id:'pending-user'},session:null},error:null})}};
+  const fake={rpc:async(name)=>{rpcCalls.push(name);return {data:{schemaVersion:2},error:null};},auth:{signUp:async()=>({data:{user:{id:'pending-user'},session:null},error:null})}};
   const adapter=createData(fake,'https://preview.example/');
   const result=await adapter.request('/auth/register',{method:'POST',body:{email:'person@example.test',name:'Test Person',password:'A unique test password',testConsent:true}});
   assert.equal(result.needsEmailConfirmation,true);assert.equal(result.user,null);

@@ -47,7 +47,7 @@ Only the project owner can provision reviewers. Neither customer signup metadata
 
 Customer: submit → reviewer: request information → customer: update and resubmit → reviewer: approve or decline → customer: read the decision and history. A second customer must not see the first customer's request. Use different browser profiles or sign out between accounts. Different StackBlitz previews now share the same Supabase records, provided they use this project's configuration.
 
-Approvals remain test decisions, not issued loans. Loan terms, offers, document storage, payments and password recovery are separate milestones.
+Approvals remain test decisions, not issued loans. Offers, payments and password recovery are separate milestones. Private document storage is available after migration 003.
 
 ## Verification boundaries
 
@@ -59,3 +59,7 @@ References:
 - https://supabase.com/docs/guides/database/postgres/row-level-security
 - https://supabase.com/docs/guides/auth/redirect-urls
 - https://supabase.com/docs/guides/getting-started/api-keys
+
+## Expanded application update
+
+See [UPGRADE-V2.md](UPGRADE-V2.md) for the required database and private document storage migrations. Existing deployments must run 002 then 003 before testing the updated form. New tenures are 7, 14, 21, 28, 56 and 84 days.
