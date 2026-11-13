@@ -2,6 +2,8 @@
 
 const state = { user: null, applications: [], selected: null, statusFilter: '', search: '', afterAuth: 'portal', routeVersion: 0 };
 let supabaseClient, accountData;
+let sessionReady = false;
+const isPublicRoute = route => !route || ['solutions','how','about','calculator'].includes(route);
 const labels = { submitted: 'Submitted', under_review: 'Under review', needs_information: 'Information needed', approved: 'Approved · test', declined: 'Declined', cancelled: 'Withdrawn' };
 const productNames = { salary_advance: 'Salary advance', personal_credit: 'Personal credit' };
 const reviewTransitions = { submitted: ['under_review','needs_information','approved','declined'], under_review: ['needs_information','approved','declined'], needs_information: ['under_review','approved','declined'], approved: [], declined: [], cancelled: [] };
@@ -91,12 +93,15 @@ async function renderRoute() {
   const version = ++state.routeVersion;
   const route = location.hash.slice(1);
   try {
-    if (!route || ['solutions','how','about','calculator'].includes(route)) {
+    if (isPublicRoute(route)) {
       if (!document.querySelector('.hero')) landing();
       if (route) document.getElementById(route)?.scrollIntoView();
       else window.scrollTo(0,0);
       return;
     }
+    // A homepage visitor can click Client login while session restoration is pending.
+    // Wait for that check instead of briefly treating a signed-in user as signed out.
+    if (!sessionReady) return;
     if (['login','register'].includes(route)) {
       if (state.user) return go('portal');
       authPage(route); window.scrollTo(0,0); return;
@@ -232,7 +237,9 @@ document.addEventListener('submit', async event => {
 });
 window.addEventListener('hashchange',renderRoute);
 async function boot() {
-  app.innerHTML='<div class="wrap"><header>'+brand+'</header><div class="panel loading" role="status">Opening Sea Credit…</div></div>';
+  const initialRoute=location.hash.slice(1);
+  if(isPublicRoute(initialRoute)) renderRoute();
+  else app.innerHTML='<div class="wrap"><header>'+brand+'</header><div class="panel loading" role="status">Checking your session…</div></div>';
   let startupError;
   try {
     const config=window.SEA_CREDIT_SUPABASE;
@@ -249,7 +256,9 @@ async function boot() {
       },0);
     });
   } catch(error) { startupError=error; }
-  renderRoute();
+  sessionReady=true;
+  // Preserve the homepage and scroll position when the background check finishes.
+  if(!isPublicRoute(location.hash.slice(1))) renderRoute();
   if(startupError) {
     const target=document.querySelector('#auth-form [data-error]');
     if(target){target.textContent=startupError.message;target.hidden=false;}
