@@ -11,5 +11,6 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test

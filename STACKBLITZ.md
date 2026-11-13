@@ -1,60 +1,54 @@
-# Test the customer-to-reviewer workflow
+# StackBlitz testing — Supabase version
 
-## 1. Load the updated repository
+## Start with the latest GitHub code
 
-Open your private GitHub repository in your authorized StackBlitz environment. Use the latest commit containing `server/`, `scripts/`, `test/`, and `dist/portal.js`. Do not reuse a preview of the older static-only files. Keep GitHub and StackBlitz visibility private.
+Reload/import the latest `main` containing `supabase/setup.sql`, `dist/supabase-config.js`, `dist/supabase-data.js` and `dist/vendor/supabase.js`. Use `npm run dev` and open port 4173 in its own browser tab.
 
-For a manual upload, copy the extracted project contents into the project root. Keep `package.json`, `preview.cjs`, `dist/`, `server/`, and `scripts/` beside one another. No npm dependencies or API keys are needed for this milestone.
+The previous local JSON database and custom password processing are no longer used. Do not run the retired `admin:create` command. Accounts created in older local previews do not automatically exist in Supabase.
 
-## 2. Create a reviewer and start
+## Finish the one-time hosted setup
 
-If the development server started automatically, stop it with Ctrl+C. Run:
+Follow [`supabase/SETUP.md`](supabase/SETUP.md):
+
+1. Run `supabase/setup.sql` in the Supabase project's SQL Editor.
+2. In **Authentication → URL Configuration**, set the current preview root as the test Site URL and add it as an exact allowed Redirect URL. Omit the `#register` or `#login` fragment. The app sends this root as `emailRedirectTo`.
+3. Keep email confirmation enabled. Use an inbox you control and a unique password.
+4. Register and confirm a reviewer account, then have the project owner run the reviewer SQL template with that account's email.
+
+Until the setup script is applied, the app will explain that database setup is incomplete. A publishable key cannot execute administrative SQL.
+
+## Customer and reviewer walkthrough
+
+1. Create a customer account with a reachable email and fictional profile/application data.
+2. Confirm the email link in the same browser where registration started, then sign in.
+3. Submit a test loan application and confirm its reference and Submitted status.
+4. Refresh and confirm that the application persists.
+5. Sign out; sign in as the provisioned reviewer and request more information with a message.
+6. Sign in as the customer, update and resubmit with a response.
+7. Sign in as the reviewer, approve or decline with a message.
+8. Confirm the customer sees the final status and full history.
+9. Create another customer and verify they cannot see the first customer's request.
+
+Applications are shared across previews using the same Supabase project. Use distinct browser profiles or sign out between roles. Data persists in Supabase independently of the StackBlitz filesystem.
+
+## Errors and recovery
+
+- **Database setup not complete:** run the full setup SQL in the correct project, then refresh.
+- **Email not confirmed:** open the confirmation email, or use Resend confirmation email. Check spam and the Supabase Auth logs.
+- **Link opens the wrong site:** update Site URL/Redirect URLs to the current preview origin, then request a fresh confirmation link. Do not allow all WebContainer hostnames.
+- **Email sending rate limit:** wait before retrying. Configure a supported SMTP provider for wider testing; keep email confirmation enabled.
+- **PKCE verifier missing/expired:** open the confirmation link in the same browser and original preview origin. Request a new link if the original preview was reset.
+- **Access denied:** ensure the entire migration ran, Data API is enabled with `public` exposed, and the reviewer was provisioned by the owner. Do not disable RLS as a workaround.
+- **Local API retired:** refresh/re-import the latest frontend; old code still calling `/api/auth/register` is no longer supported.
+
+## Automated checks
 
 ```sh
-npm run admin:create -- reviewer@example.test
-npm run dev
+npm ci --ignore-scripts
+npm run check
+npm test
 ```
 
-Copy the generated password to a private place. Do not put it into a source file or commit it. The admin command intentionally refuses to overwrite an existing account. If you have already created a reviewer and saved the password, skip that command.
+These tests use an isolated PostgreSQL-compatible local engine and mock auth identity; they do not send emails or alter the live project. Real sign-up, email confirmation and hosted RLS need verification after the hosted migration is applied.
 
-Open the preview on port 4173. If sign-in does not stick in an embedded preview, open that preview in its own browser tab so cookies are not blocked by the embedding context.
-
-## 3. Customer test
-
-1. Choose Get started and register a fictional customer, for example `customer@example.test`, with a unique password of at least 12 characters.
-2. Complete the application form using fictional contact, employment and income details. Check the test-information acknowledgement and submit.
-3. Confirm an application reference and Submitted status appear. Refresh the page and confirm the application remains.
-4. Open Your details, change a contact field, save and refresh to verify persistence.
-5. Sign out.
-
-## 4. Reviewer test
-
-1. Sign in using `reviewer@example.test` and the generated password.
-2. Open Review applications, locate the customer's request and select Review.
-3. Choose Information needed, add a specific message and save the update.
-4. Sign out and sign in as the customer. Open the application, select Update & resubmit, make the requested correction and add a response.
-5. Sign back in as the reviewer, reopen the request, and save an Approved or Declined test decision with a message.
-6. Sign back in as the customer and confirm the decision and full history are visible.
-
-Run both roles against the same running project. Opening a separate StackBlitz fork creates a separate development environment and data store, not a shared backend. A reviewer account has no self-service registration button; only the provisioning script grants that role.
-
-## 5. Additional checks
-
-- Create a second customer. They must not see the first customer's application.
-- Test status filters, empty states, required fields and invalid amounts.
-- Withdraw a pending application. Closed applications cannot be edited or reviewed again.
-- Refresh before updating a request another session has changed. Stale versions are rejected.
-- Stop and restart `npm run dev` without resetting the container. The same `.data/` directory retains records.
-- Run `npm run check` and `npm test`.
-
-## Troubleshooting
-
-- **Backend unavailable:** run `npm run dev` from the directory containing `package.json`; a static server cannot run the API.
-- **Origin not allowed:** use the application's own preview tab. If a trusted proxy rewrites Host, set `APP_ORIGIN` to that preview's exact scheme and hostname and restart. Never use a wildcard.
-- **Already registered:** sign in with the existing test account or choose a different fictional email. Email-based password recovery is not connected yet.
-- **Missing records after re-import/fork:** runtime data is local to that environment and excluded from Git. A durable shared database is a later milestone.
-- **Private GitHub import unavailable:** preserve repository privacy and use an authorized project import/upload supported by your StackBlitz account.
-
-## What this test does not verify
-
-There are no real loan offers, payments, disbursements, KYC checks, uploaded documents or email messages in this version. Approving a test application does not issue credit. A custom domain is not needed for this stage, but shared staging will require a persistent backend and database.
+Payments, loan disbursements, supporting documents and password recovery are outside this milestone. Use fictional application details only.

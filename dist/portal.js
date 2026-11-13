@@ -1,6 +1,7 @@
 'use strict';
 
-const state = { user: null, csrfToken: null, applications: [], selected: null, statusFilter: '', search: '', afterAuth: 'portal', routeVersion: 0 };
+const state = { user: null, applications: [], selected: null, statusFilter: '', search: '', afterAuth: 'portal', routeVersion: 0 };
+let supabaseClient, accountData;
 const labels = { submitted: 'Submitted', under_review: 'Under review', needs_information: 'Information needed', approved: 'Approved · test', declined: 'Declined', cancelled: 'Withdrawn' };
 const productNames = { salary_advance: 'Salary advance', personal_credit: 'Personal credit' };
 const reviewTransitions = { submitted: ['under_review','needs_information','approved','declined'], under_review: ['needs_information','approved','declined'], needs_information: ['under_review','approved','declined'], approved: [], declined: [], cancelled: [] };
@@ -9,22 +10,13 @@ const when = value => new Intl.DateTimeFormat('en-NG', { dateStyle:'medium', tim
 const badge = status => `<span class="badge status-${esc(status)}">${esc(labels[status] || status)}</span>`;
 
 async function api(path, options = {}) {
-  let response;
+  if (!accountData) throw new Error('Supabase could not load. Refresh the page and check your connection.');
   try {
-    response = await fetch(`/api${path}`, {
-      method: options.method || 'GET', credentials: 'same-origin', cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', ...(state.csrfToken ? { 'X-CSRF-Token': state.csrfToken } : {}) },
-      ...(options.body ? { body: JSON.stringify(options.body) } : {})
-    });
-  } catch { throw new Error('Cannot reach the server. Check that npm run dev is running, then try again.'); }
-  const data = await response.json().catch(() => ({ error: 'The backend is unavailable. Run this project with npm run dev, not a static file preview.' }));
-  if (!response.ok) {
-    const error = new Error(data.error || 'Something went wrong. Please try again.');
-    error.status = response.status;
-    if (response.status === 401) { state.user = null; state.csrfToken = null; }
+    return await accountData.request(path, options);
+  } catch (error) {
+    if (error.status === 401) state.user = null;
     throw error;
   }
-  return data;
 }
 function go(route) {
   if (location.hash === `#${route}`) renderRoute();
@@ -47,7 +39,7 @@ function show(content) {
 }
 function authPage(mode = 'login') {
   const register = mode === 'register';
-  app.innerHTML = `<div class="wrap"><header>${brand}<a class="textbtn" href="#">← Back to website</a></header><main class="auth-layout"><div class="auth-story"><div class="eyebrow">Your next chapter</div><h1>A little support.<br>A clearer way<br><em>forward.</em></h1><p>Apply, follow your progress, and hear from your reviewer. Your Sea Credit journey starts here.</p><div class="auth-benefits"><p>01 &nbsp; Your own account</p><p>02 &nbsp; Applications that stay saved</p><p>03 &nbsp; Clear review updates</p></div></div><section class="auth-card"><div class="eyebrow">${register ? 'Welcome to Sea Credit' : 'Good to see you'}</div><h2>${register ? 'Create a test account' : 'Sign in to your account'}</h2><p class="small">Development testing only. Use fictional details and a unique test password.</p><form id="auth-form" data-mode="${mode}">${register ? '<label for="auth-name">Full name</label><input id="auth-name" name="name" autocomplete="name" minlength="2" maxlength="100" required placeholder="e.g. Ada Test">' : ''}<label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="username" maxlength="254" required placeholder="you@example.test"><label for="auth-password">Password</label><div class="password-field"><input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" minlength="12" maxlength="128" required aria-describedby="password-hint"><button type="button" data-action="toggle-password" aria-label="Show password">Show</button></div><p class="small" id="password-hint">At least 12 characters. Passwords are stored as salted hashes.</p>${register ? '<label class="checkbox-label"><input name="testConsent" type="checkbox" required> I am creating a test account with fictional details.</label>' : ''}<div class="form-error" data-error hidden role="alert" tabindex="-1"></div><button class="btn full-width" type="submit">${register ? 'Create account' : 'Sign in'} →</button></form><p class="auth-switch">${register ? 'Already have an account? <a href="#login">Sign in</a>' : 'New to Sea Credit? <a href="#register">Create an account</a>'}</p><p class="small">Email verification and password recovery are not connected in this test build. Administrators use the same sign-in form.</p></section></main></div>`;
+  app.innerHTML = `<div class="wrap"><header>${brand}<a class="textbtn" href="#">← Back to website</a></header><main class="auth-layout"><div class="auth-story"><div class="eyebrow">Your next chapter</div><h1>A little support.<br>A clearer way<br><em>forward.</em></h1><p>Apply, follow your progress, and hear from your reviewer. Your Sea Credit journey starts here.</p><div class="auth-benefits"><p>01 &nbsp; Your own account</p><p>02 &nbsp; Applications that stay saved</p><p>03 &nbsp; Clear review updates</p></div></div><section class="auth-card"><div class="eyebrow">${register ? 'Welcome to Sea Credit' : 'Good to see you'}</div><h2>${register ? 'Create a test account' : 'Sign in to your account'}</h2><p class="small">Use an email inbox you control for confirmation, fictional application details, and a unique test password.</p><form id="auth-form" data-mode="${mode}">${register ? '<label for="auth-name">Full name</label><input id="auth-name" name="name" autocomplete="name" minlength="2" maxlength="100" required placeholder="e.g. Ada Test">' : ''}<label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="username" maxlength="254" required placeholder="you@example.test"><label for="auth-password">Password</label><div class="password-field"><input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" minlength="12" maxlength="128" required aria-describedby="password-hint"><button type="button" data-action="toggle-password" aria-label="Show password">Show</button></div><p class="small" id="password-hint">At least 12 characters. Supabase Auth manages your password securely.</p>${register ? '<label class="checkbox-label"><input name="testConsent" type="checkbox" required> I am creating a test account and will use fictional application details.</label>' : ''}<div class="form-error" data-error hidden role="alert" tabindex="-1"></div><button class="btn full-width" type="submit">${register ? 'Create account' : 'Sign in'} →</button></form><button class="textbtn" type="button" data-action="resend-confirmation">Resend confirmation email</button><p class="auth-switch">${register ? 'Already have an account? <a href="#login">Sign in</a>' : 'New to Sea Credit? <a href="#register">Create an account</a>'}</p><p class="small">Email confirmation is required. Administrators use the same sign-in form. Password recovery is a later milestone.</p></section></main></div>`;
 }
 function shell(active, content) {
   const admin = state.user.role === 'admin';
@@ -113,7 +105,7 @@ async function renderRoute() {
     if (route==='apply') { applicationForm(); window.scrollTo(0,0); return; }
     if (route==='profile') { profilePage(); window.scrollTo(0,0); return; }
     if (route==='support') {
-      shell('support','<h1>A little help, when you need it.</h1><div class="panel"><h3>Following up on an application?</h3><p>Open My applications to read your reviewer’s latest message. If more information is requested, you can update and resubmit from the application detail page.</p><a class="btn" href="#applications">View applications →</a></div><div class="panel"><h3>About this test environment</h3><p>Accounts and applications are saved in the running project. Email, password recovery, document uploads and payments are not connected yet. Restarting the same server preserves its data; resetting or forking the StackBlitz environment may not.</p></div>'); return;
+      shell('support','<h1>A little help, when you need it.</h1><div class="panel"><h3>Following up on an application?</h3><p>Open My applications to read your reviewer’s latest message. If more information is requested, you can update and resubmit from the application detail page.</p><a class="btn" href="#applications">View applications →</a></div><div class="panel"><h3>About this test environment</h3><p>Accounts and applications are stored in Supabase and shared across previews using this project. Confirm your email before signing in. Password recovery, document uploads and payments are not connected yet.</p></div>'); return;
     }
     shell(route.startsWith('application')?'applications':'portal','<div class="panel loading" role="status">Loading your workspace…</div>');
     if (route.startsWith('application/')) {
@@ -147,6 +139,7 @@ document.addEventListener('click', async event => {
       case 'apply': state.afterAuth = 'apply'; go(state.user?'apply':'register'); break;
       case 'refresh': await renderRoute(); break;
       case 'close': modal.close(); break;
+      case 'resend-confirmation': show('<h2>Resend confirmation</h2><form id="resend-form"><label for="resend-email">Email address</label><input id="resend-email" name="email" type="email" autocomplete="email" required><div data-error class="form-error" role="alert" tabindex="-1" hidden></div><button class="btn" type="submit">Send confirmation link</button></form>'); break;
       case 'toggle-password': {
         const input = document.querySelector('#auth-password');
         input.type = input.type==='password'?'text':'password';
@@ -156,7 +149,7 @@ document.addEventListener('click', async event => {
       case 'logout':
         button.disabled = true;
         await api('/auth/logout',{method:'POST',body:{}});
-        state.user=null; state.csrfToken=null; state.applications=[]; state.selected=null; state.afterAuth='portal';
+        state.user=null; state.applications=[]; state.selected=null; state.afterAuth='portal';
         go('login'); break;
       case 'edit-application': applicationForm(state.selected); window.scrollTo(0,0); break;
       case 'cancel-application': show('<h2>Withdraw this application?</h2><p>Your request will be closed and its history retained. You can start another application afterward.</p><div class="form-actions"><button class="btn" data-action="confirm-cancel">Withdraw application</button><button class="btn light" data-action="close">Keep application</button></div>'); break;
@@ -179,7 +172,7 @@ document.addEventListener('change', event => {
 });
 document.addEventListener('submit', async event => {
   const form=event.target;
-  if(!['auth-form','profile-form','application-form','review-form'].includes(form.id)) return;
+  if(!['auth-form','profile-form','application-form','review-form','resend-form'].includes(form.id)) return;
   event.preventDefault();
   if(form.dataset.busy==='true') return;
   form.dataset.busy='true';
@@ -193,9 +186,17 @@ document.addEventListener('submit', async event => {
     if(form.id==='auth-form') {
       body.testConsent=body.testConsent==='on';
       const data=await api(`/auth/${form.dataset.mode}`,{method:'POST',body});
-      state.user=data.user;state.csrfToken=data.csrfToken;
+      if(data.needsEmailConfirmation) {
+        go('login');
+        show('<h2>Check your email</h2><p>If this address can be registered, Supabase will send a confirmation link. Open it in the same browser, then sign in. If you already have an account, sign in with that account instead.</p><p class="small">The link must return to this preview. Ask the project owner to check Supabase URL Configuration if it goes somewhere else.</p><button class="btn" data-action="close">Return to sign in</button>');
+        return;
+      }
+      state.user=data.user;
       const destination=state.user.role==='admin'?'portal':state.afterAuth;
       state.afterAuth='portal';go(destination);toast(form.dataset.mode==='register'?'Your test account is ready.':'Welcome back.');
+    } else if(form.id==='resend-form') {
+      await api('/auth/resend',{method:'POST',body});
+      modal.close();toast('If the account needs confirmation, check its inbox for a new link.');
     } else if(form.id==='profile-form') {
       const data=await api('/profile',{method:'PATCH',body});state.user=data.user;profilePage();toast('Your details have been saved.');
     } else if(form.id==='application-form') {
@@ -212,15 +213,34 @@ document.addEventListener('submit', async event => {
     }
   } catch(error) {
     // Incorrect credentials should remain on the sign-in form instead of causing a route loop.
-    if(form.id==='auth-form'){errorBox.textContent=error.message;errorBox.hidden=false;errorBox.focus();}
+    if(form.id==='auth-form'||form.id==='resend-form'){errorBox.textContent=error.message;errorBox.hidden=false;errorBox.focus();}
     else errorMessage(error,form);
   } finally { form.dataset.busy='false';button.disabled=false;button.textContent=previousLabel; }
 });
 window.addEventListener('hashchange',renderRoute);
 async function boot() {
   app.innerHTML='<div class="wrap"><header>'+brand+'</header><div class="panel loading" role="status">Opening Sea Credit…</div></div>';
-  try { const data=await api('/auth/me');state.user=data.user;state.csrfToken=data.csrfToken; }
-  catch(error) { toast(error.message); }
+  let startupError;
+  try {
+    const config=window.SEA_CREDIT_SUPABASE;
+    if(!window.supabase?.createClient || !config?.url || !config?.publishableKey) throw new Error('Supabase configuration or client files are missing. Load the complete updated project.');
+    supabaseClient=window.supabase.createClient(config.url,config.publishableKey,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    accountData=window.createSeaCreditData(supabaseClient,location.origin+location.pathname);
+    const authError=new URLSearchParams(location.hash.slice(1)).get('error_description');
+    if(authError) { history.replaceState(null,'',location.pathname+'#login');startupError=new Error(authError); }
+    const data=await api('/auth/me');state.user=data.user;
+    supabaseClient.auth.onAuthStateChange((event)=>{
+      if(event==='SIGNED_OUT') setTimeout(()=>{
+        state.user=null;state.applications=[];state.selected=null;
+        if(!document.querySelector('.hero')&&!document.querySelector('#auth-form')) go('login');
+      },0);
+    });
+  } catch(error) { startupError=error; }
   renderRoute();
+  if(startupError) {
+    const target=document.querySelector('#auth-form [data-error]');
+    if(target){target.textContent=startupError.message;target.hidden=false;}
+    else toast(startupError.message);
+  }
 }
 boot();

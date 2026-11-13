@@ -1,0 +1,2 @@
+# Preserve the upstream vendored distribution without whitespace/diff noise.
+dist/vendor/supabase.js -diff -whitespace

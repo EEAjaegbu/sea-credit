@@ -1,80 +1,73 @@
-# Sea Credit — working development application
+# Sea Credit — Supabase development application
 
-Sea Credit's branded landing page, customer account area and manual application-review dashboard. Built with browser HTML/CSS/JavaScript and a Node.js backend, with no third-party runtime dependencies.
+Branded landing page, customer accounts, loan applications and manual reviewer dashboard. Version 0.3 replaces the StackBlitz-local JSON database and custom password hashing with **Supabase Auth and PostgreSQL**.
 
-## Quick start
+## Required one-time setup
 
-Use Node.js 20 or newer (Node.js 22 recommended). Open the repository in a Node.js StackBlitz environment, then run:
+The URL and public publishable key are configured for project `exyseocugjxuolymmmac`. The hosted schema still needs to be installed by the project owner:
+
+1. Run the complete [`supabase/setup.sql`](supabase/setup.sql) in that project's Supabase SQL Editor.
+2. Configure the app's current preview URL in **Authentication → URL Configuration** for email confirmation.
+3. Register and confirm accounts through the app. Use an inbox you control, a unique password, and fictional application information.
+4. To give a confirmed account reviewer access, follow [`supabase/promote-reviewer.sql`](supabase/promote-reviewer.sql). Only the project owner should execute that script after selecting the intended account.
+
+See [`supabase/SETUP.md`](supabase/SETUP.md) for exact steps. Supplying an API key alone does not install tables. Without the schema, registration displays a clear setup message and does not create a partial account through the app.
+
+## Run in StackBlitz or locally
+
+Use Node.js 20 or newer; Node.js 22 is used by CI.
 
 ```sh
 npm run dev
 ```
 
-Open the preview on port 4173. Create a customer account using fictional information and a unique test password of at least 12 characters. The server must run: opening `dist/index.html` alone or deploying only `dist/` will not provide the API.
+Open port 4173, preferably in its own browser tab. The Node server now serves static files only. The browser communicates directly with Supabase using its official JavaScript client, which is pinned and vendored locally. No secret key or database password is required by the frontend.
 
-To provision a reviewer, stop the server first and run:
+## Working features
 
-```sh
-npm run admin:create -- reviewer@example.test
-npm run dev
-```
+- Supabase email/password registration, confirmation, sign-in, sign-out and session refresh.
+- A check-your-email step for registrations that do not yet have a confirmed session.
+- Confirmation resend with actionable provider errors.
+- Customer profiles, applications, review history and status filters.
+- Reviewer requests for information, approval and decline; customer resubmission and withdrawal.
+- Database-enforced ownership checks and reviewer roles independent of user-editable metadata.
+- RLS on every public application table; no client-side direct inserts, updates or deletes.
+- Transactional workflow functions, idempotent submissions, five-open-application limit and stale-version protection.
 
-The command prints a generated reviewer password once. Save it privately, outside the repository. Sign out of the customer account and use Client login with this reviewer account. Customer registration cannot create or promote administrators. No default passwords are shipped.
+Approval is a **test decision**, not a loan agreement, disbursement or repayment obligation. Test amount and period limits are illustrative. KYC, document uploads, binding offers, payments, password recovery and production operational hardening remain future milestones.
 
-## Implemented
+## Security and persistence
 
-- Customer registration, sign-in and sign-out.
-- Salted scrypt password hashes; opaque, expiring HttpOnly session cookies; CSRF and origin checks; login rate limits.
-- Server-side customer/admin authorization and application ownership checks.
-- Persistent customer profiles and applications in a local development data file.
-- Loan request form with contact details, employment information, income, amount, period and purpose.
-- Customer application lists, status filters and application history.
-- Reviewer queue and manual status updates with messages visible to the customer.
-- Requests for additional information, customer correction/resubmission and withdrawal.
-- Idempotent application creation and version checks that reject conflicting updates.
-- Automated tests of the full API workflow, authorization boundaries and restart persistence.
+Customer records are stored in the configured Supabase project, rather than the browser's StackBlitz container. Different previews using that project share data and enforce access through Supabase Auth and Postgres policies. The official SDK persists the browser's session and refreshes tokens. Avoid running untrusted scripts on the same origin.
 
-The account dashboard now shows actual test applications. The previous fictional loan balance, payment card and statement controls were removed rather than presented as real account data.
+`dist/supabase-config.js` contains **public** project configuration. A publishable key identifies the project; it does not grant reviewer or SQL administration access. Never add `sb_secret_...`, a `service_role` key, a database password or an access token to this repository.
 
-## Development data and limits
+Reviewer status is held in the private database table, not signup metadata. Customers cannot promote themselves or directly forge application status/history. Guarded SQL functions check identity and role for every mutation.
 
-The single-process Node backend writes `.data/database.json` atomically. Accounts, hashed sessions, profiles and applications survive restarting the server **when the same data directory remains present**. `.data/` is ignored by Git and is never exposed by the static server. It contains private development records: do not commit it or include it in exports.
+Local `.data/` records are no longer used and are **not migrated** to Supabase. Register new accounts in Supabase. The previous local `admin:create` command has been retired.
 
-StackBlitz WebContainers run in the browser. This local store is not a shared hosted database; separate forks or environments do not share accounts. A container reset or project re-import may discard its runtime data. Use a persistent hosted database before shared staging or production. Do not run multiple server processes against the same JSON file. Stop the server before provisioning administrators or making a private backup.
-
-Only fictional test information should be used in this build. Requests of ₦50,000–₦1,000,000 and periods of 1, 3 or 6 months are **test validation limits**, not confirmed Sea Credit product terms. The landing-page calculator remains illustrative and does not set application terms.
-
-Approval records a manual **test review decision**. It creates no loan agreement, disbursement, outstanding balance, or repayment obligation. There is no automatic credit scoring.
-
-## Not implemented yet
-
-Email verification and password recovery, KYC, supporting-document uploads, hosted database/storage, approved product rules, binding loan offers, disbursements, repayment accounting, payment-provider integration and notifications remain future milestones. This development server is not production-hardened hosting.
-
-## Checks
+## Tests
 
 ```sh
+npm ci --ignore-scripts
 npm run check
 npm test
 ```
 
-The tests create an isolated temporary database, exercise the customer/reviewer workflow, restart the server to verify persistence, and clean up their own temporary files. They do not touch `.data/` or use real customer records. GitHub Actions runs the same checks on pushes and pull requests.
+The tests execute the actual SQL in a local PGlite PostgreSQL engine, simulating Supabase's auth schema and JWT identity function. They verify privileges, RLS, profile creation, role boundaries, validation, idempotency, review transitions and transaction rollback. Separate tests cover pending email confirmation, missing-schema errors and static serving. They do not create accounts, send emails or modify the live Supabase project.
 
-## Source layout
+Hosted setup and the complete sign-up/confirmation flow must still be checked in the real project. Passing local SQL tests does not prove live email delivery or hosted configuration. See [`STACKBLITZ.md`](STACKBLITZ.md).
+
+## Files
 
 ```text
-dist/              Landing page, portal UI, styles
-server/app.cjs     HTTP API, sessions, authorization and workflow validation
-server/store.cjs   Single-process development persistence and password hashing
-scripts/          Reviewer account provisioning
-test/             Automated API workflow tests
-preview.cjs       Server entry point
-STACKBLITZ.md     Step-by-step test guide
+dist/                    Branded UI, Supabase transport and public config
+dist/vendor/             Pinned official Supabase browser SDK and license
+supabase/setup.sql       Tables, grants, RLS and application workflow functions
+supabase/promote-reviewer.sql  Owner-only reviewer provisioning template
+server/app.cjs           Static preview server; no account/password backend
+preview.cjs              Development server entry point
+test/supabase.test.cjs   PostgreSQL, adapter and static-server tests
 ```
 
-Optional environment variables are documented in `.env.example`. The app reads process environment variables; it does not automatically load `.env` files. `APP_ORIGIN` can be set to the exact trusted preview origin if a proxy changes the Host header. Do not disable origin checks or use a wildcard. HTTPS requests use Secure session cookies; localhost HTTP works for development.
-
-Keep the GitHub repository private. `private: true` in package.json only prevents npm publication; it does not control GitHub or StackBlitz visibility. Do not upload `.git/`, `.openai/`, `.data/`, environment secrets, or old deployment archives.
-
-## Branding
-
-Royal blue, violet, turquoise and white are visually matched to the supplied Sea Credit LinkedIn screenshot. Fonts load from Google Fonts and the landing-page image loads from Unsplash. Company positioning came from the supplied references and https://vc4a.com/ventures/sea-credit-ltd/ . Confirm official assets and product copy before public release.
+Keep the GitHub repository and StackBlitz project private. `private: true` in package.json only prevents npm publication. Fonts load from Google Fonts and the landing-page photograph loads from Unsplash. Branding is visually matched to the supplied Sea Credit reference.

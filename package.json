@@ -1,15 +1,21 @@
 {
   "name": "sea-credit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Sea Credit website and client portal development project",
   "scripts": {
     "dev": "node preview.cjs",
     "start": "node preview.cjs",
-    "check": "node --check dist/app.js && node --check dist/portal.js && node --check server/app.cjs && node --check server/store.cjs && node --check preview.cjs && node --check scripts/create-admin.cjs",
-    "test": "node --test test/workflow.test.cjs",
-    "admin:create": "node scripts/create-admin.cjs"
+    "check": "node --check dist/app.js && node --check dist/portal.js && node --check dist/supabase-data.js && node --check dist/supabase-config.js && node --check server/app.cjs && node --check preview.cjs",
+    "test": "node --test test/supabase.test.cjs"
   },
-  "engines": { "node": ">=20" },
-  "stackblitz": { "startCommand": "npm run dev" }
+  "engines": {
+    "node": ">=20"
+  },
+  "stackblitz": {
+    "startCommand": "npm run dev"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16"
+  }
 }
